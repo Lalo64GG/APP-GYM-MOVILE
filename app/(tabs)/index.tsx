@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useMembershipViewModel } from "@/src/home/presentation/MembershipViewModel";
 import { styles } from "@/src/home/presentation/styles";
 import * as Notifications from "expo-notifications";
+import * as Device from 'expo-device';
 
 // Configurar el comportamiento de las notificaciones cuando la app está en primer plano
 Notifications.setNotificationHandler({
@@ -32,17 +33,12 @@ const MembershipScreen = () => {
   const { membership, gymName, loading, getCurrentDate, expoPushToken, sendLocalNotification } =
     useMembershipViewModel();
 
-  // Efecto para registrar cuando se recibe el token de Expo
-  useEffect(() => {
-    if (expoPushToken) {
-      console.log("Token de notificaciones disponible en la UI:", expoPushToken);
-      
-      // Aquí podrías realizar alguna acción adicional cuando el token está disponible
-      // Por ejemplo, mostrar un mensaje al usuario o habilitar ciertas funcionalidades
-    }
-  }, [expoPushToken]);
+  // Definir referencias para los listeners de notificaciones
+  // Necesitan tener un tipo más específico para evitar errores TypeScript
+  const notificationListener = useRef();
+  const responseListener = useRef();
 
-  // Función para solicitar permisos de notificaciones manualmente
+  // Define la función requestNotificationPermission
   const requestNotificationPermission = async () => {
     try {
       if (Platform.OS === 'ios') {
@@ -60,11 +56,13 @@ const MembershipScreen = () => {
                 const { status } = await Notifications.requestPermissionsAsync();
                 if (status === 'granted') {
                   Alert.alert("¡Perfecto!", "Ahora recibirás notificaciones importantes.");
-                  // Enviar una notificación de prueba
-                  await sendLocalNotification(
-                    "¡Notificaciones activadas!", 
-                    "Te mantendremos informado sobre tu membresía y promociones."
-                  );
+                  // Si tienes la función sendLocalNotification, úsala aquí
+                  if (sendLocalNotification) {
+                    await sendLocalNotification(
+                      "¡Notificaciones activadas!", 
+                      "Te mantendremos informado sobre tu membresía y promociones."
+                    );
+                  }
                 } else {
                   Alert.alert(
                     "Permiso denegado",
@@ -80,11 +78,12 @@ const MembershipScreen = () => {
         const { status } = await Notifications.requestPermissionsAsync();
         if (status === 'granted') {
           Alert.alert("¡Perfecto!", "Ahora recibirás notificaciones importantes.");
-          // Enviar una notificación de prueba
-          await sendLocalNotification(
-            "¡Notificaciones activadas!", 
-            "Te mantendremos informado sobre tu membresía y promociones."
-          );
+          if (sendLocalNotification) {
+            await sendLocalNotification(
+              "¡Notificaciones activadas!", 
+              "Te mantendremos informado sobre tu membresía y promociones."
+            );
+          }
         } else {
           Alert.alert(
             "Permiso denegado",
@@ -97,6 +96,87 @@ const MembershipScreen = () => {
     }
   };
 
+  const sendTestNotification = async () => {
+    try {
+      if (sendLocalNotification) {
+        await sendLocalNotification(
+          "Notificación de prueba", 
+          "Esta es una notificación de prueba. ¡Funciona correctamente!"
+        );
+      } else {
+        // Si no, usa Notifications directamente
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Notificación de prueba",
+            body: "Esta es una notificación de prueba enviada directamente desde la aplicación.",
+          },
+          trigger: null, // mostrar inmediatamente
+        });
+      }
+      
+    } catch (error) {
+      console.error("Error al enviar notificación de prueba:", error);
+      Alert.alert("Error", "No se pudo enviar la notificación de prueba.");
+    }
+  };
+
+  async function registerForPushNotificationsAsync() {
+    let token;
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        alert('¡No se otorgaron permisos para notificaciones!');
+        return;
+      }
+      token = (await Notifications.getDevicePushTokenAsync()).data; // Token nativo para FCM/APNs
+      console.log('Token:', token);
+    } else {
+      alert('Debes usar un dispositivo físico para notificaciones push');
+    }
+  
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+  
+    return token;
+  }
+
+  useEffect(() => {
+    // Registrar el dispositivo y obtener el token
+    registerForPushNotificationsAsync().then(token => {
+      if (token) {
+        // Guardar el token en Firestore (puedes asociarlo a un usuario)
+        console.log("Token para enviar a Firebase:", token);
+      }
+    });
+
+    // Escuchar notificaciones recibidas mientras la app está en primer plano
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notificación recibida:', notification);
+    });
+
+    // Escuchar cuando el usuario interactúa con una notificación
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+      console.log('Interacción con notificación:', response);
+    });
+
+    // Limpiar los listeners al desmontar el componente
+    return () => {
+      Notifications.removeNotificationSubscription(notificationListener.current);
+      Notifications.removeNotificationSubscription(responseListener.current);
+    };
+  }, []);
+    
   const openEmailSupport = () => {
     const email = "novacode@gallegosb.xyz";
     const subject = encodeURIComponent("Soporte Técnico");
@@ -107,42 +187,6 @@ const MembershipScreen = () => {
     Linking.openURL(mailto).catch((err) => {
       console.error("Error al abrir Gmail:", err);
     });
-  };
-
-  // Función para enviar una notificación de prueba al hacer clic en un botón
-  const sendTestNotification = async () => {
-    try {
-      if (!expoPushToken) {
-        Alert.alert(
-          "Notificaciones no configuradas",
-          "Primero debes activar las notificaciones.",
-          [
-            {
-              text: "Activar ahora",
-              onPress: requestNotificationPermission
-            },
-            {
-              text: "Cancelar",
-              style: "cancel"
-            }
-          ]
-        );
-        return;
-      }
-      
-      await sendLocalNotification(
-        "Notificación de prueba", 
-        "Esta es una notificación local de prueba. ¡Funciona correctamente!"
-      );
-      
-      Alert.alert(
-        "Notificación enviada",
-        "Se ha enviado una notificación de prueba."
-      );
-    } catch (error) {
-      console.error("Error al enviar notificación de prueba:", error);
-      Alert.alert("Error", "No se pudo enviar la notificación de prueba.");
-    }
   };
 
   if (loading) {

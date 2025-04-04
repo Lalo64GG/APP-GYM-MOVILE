@@ -8,7 +8,6 @@ import * as Sharing from "expo-sharing";
 import * as IntentLauncher from "expo-intent-launcher";
 import * as MediaLibrary from "expo-media-library";
 import { styles } from "@/src/rutines/presentation/styles";
-import * as Permissions from 'expo-permissions';
 
 const BASE_URL = "https://gsoft.gallegosb.xyz/api";
 

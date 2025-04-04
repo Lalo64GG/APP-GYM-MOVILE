@@ -54,6 +54,9 @@ export const useLoginViewModel = () => {
       // Guardar id y token en AsyncStorage
       await AsyncStorage.setItem("userId", success.id);
       await AsyncStorage.setItem("token", success.token);
+      await AsyncStorage.setItem("photo", success.photo)
+      await AsyncStorage.setItem("name", success.name)
+      
 
       login();
       return true;

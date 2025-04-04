@@ -16,7 +16,6 @@
         "NSPhotoLibraryUsageDescription": "Esta app necesita acceso a la biblioteca de fotos para guardar tus rutinas descargadas.",
         "NSPhotoLibraryAddUsageDescription": "Esta app necesita acceso para guardar tus rutinas descargadas en tu galería.",
         "UIBackgroundModes": [
-          "remote-notification",
           "remote-notification"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -80,7 +79,7 @@
       [
         "expo-notifications",
         {
-          "color": "#ffffff"
+         
         }
       ]
     ],
